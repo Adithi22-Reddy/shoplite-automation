@@ -183,7 +183,7 @@ function applyDiscount(){
 }
 
 function checkout(){
-  if(cart.length === 0){
+  if(cart.length === 1){
     showMsg('Your cart is empty', 'err');
     return;
   }
