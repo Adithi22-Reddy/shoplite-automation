@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ShopLite — Mini Cart</title>
+<style>
+:root{
+  --bg:#f5f6f8; --card:#ffffff; --text:#1a1d23; --muted:#6b7280;
+  --accent:#7c3aed; --accent-hover:#6d28d9; --border:#e2e4e9; --err:#dc2626; --ok:#16a34a;
+  box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){ --bg:#15171c; --card:#1e2129; --text:#e8e9ec; --muted:#9096a3; --border:#2c3038; }
+}
+:root[data-theme="dark"]{ --bg:#15171c; --card:#1e2129; --text:#e8e9ec; --muted:#9096a3; --border:#2c3038; }
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;padding:24px 16px;}
+.wrap{max-width:600px;margin:0 auto;}
+h1{font-size:20px;margin:0 0 4px;}
+p.sub{color:var(--muted);font-size:14px;margin:0 0 20px;}
+h2{font-size:14px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin:24px 0 10px;}
+.product{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:10px;}
+.product .name{font-weight:600;font-size:14px;}
+.product .price{color:var(--muted);font-size:13px;}
+.product .stock{font-size:11px;margin-top:2px;}
+.stock.ok{color:var(--ok);} .stock.low{color:#d97706;} .stock.out{color:var(--err);}
+.qty{width:56px;padding:6px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;text-align:center;}
+.addBtn{padding:8px 14px;border:none;border-radius:6px;background:var(--accent);color:#fff;font-size:12px;font-weight:600;cursor:pointer;}
+.addBtn:hover{background:var(--accent-hover);}
+.cartItem{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;font-size:13px;}
+.removeBtn{background:transparent;border:1px solid var(--err);color:var(--err);border-radius:6px;padding:4px 8px;font-size:11px;cursor:pointer;}
+.summary{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px;margin-top:14px;font-size:14px;}
+.summary .row{display:flex;justify-content:space-between;margin-bottom:6px;}
+.summary .row.total{font-weight:700;font-size:16px;border-top:1px solid var(--border);padding-top:8px;margin-top:8px;}
+.discountRow{display:flex;gap:8px;margin-top:14px;}
+.discountRow input{flex:1;padding:8px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;}
+.discountRow button{padding:8px 14px;border:none;border-radius:6px;background:var(--accent);color:#fff;font-size:12px;font-weight:600;cursor:pointer;}
+.checkoutBtn{margin-top:14px;width:100%;padding:12px;border:none;border-radius:8px;background:var(--ok);color:#fff;font-size:14px;font-weight:700;cursor:pointer;}
+.msg{margin-top:10px;font-size:13px;padding:10px;border-radius:8px;display:none;}
+.msg.ok{display:block;background:rgba(22,163,74,.12);color:var(--ok);}
+.msg.err{display:block;background:rgba(220,38,38,.12);color:var(--err);}
+.empty{color:var(--muted);font-size:13px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>ShopLite</h1>
+  <p class="sub">Sample cart app for QA practice.</p>
+
+  <h2>Products</h2>
+  <div id="products"></div>
+
+  <h2>Cart</h2>
+  <div id="cartItems"><div class="empty">Cart is empty.</div></div>
+
+  <div class="summary">
+    <div class="row"><span>Subtotal</span><span id="subtotal">$0.00</span></div>
+    <div class="row"><span>Discount</span><span id="discountRow">—</span></div>
+    <div class="row total"><span>Total</span><span id="total">$0.00</span></div>
+  </div>
+
+  <div class="discountRow">
+    <input id="discountCode" type="text" placeholder="Discount code (try SAVE10)">
+    <button onclick="applyDiscount()">Apply</button>
+  </div>
+
+  <button class="checkoutBtn" onclick="checkout()">Checkout</button>
+  <div class="msg" id="msg"></div>
+</div>
+
+<script>
+const products = [
+  { name: 'Wireless Mouse', price: 25, stock: 5 },
+  { name: 'Mechanical Keyboard', price: 75, stock: 3 },
+  { name: 'USB-C Hub', price: 40, stock: 0 },
+];
+
+let cart = [];
+let discountApplied = false;
+
+function renderProducts(){
+  const el = document.getElementById('products');
+  el.innerHTML = products.map(function(p, i){
+    const stockClass = p.stock === 0 ? 'out' : (p.stock <= 3 ? 'low' : 'ok');
+    const stockLabel = p.stock === 0 ? 'Out of stock' : p.stock + ' in stock';
+    const disabledAttr = p.stock === 0 ? 'disabled' : '';
+    return '<div class="product">' +
+      '<div><div class="name">' + p.name + '</div>' +
+      '<div class="price">$' + p.price.toFixed(2) + '</div>' +
+      '<div class="stock ' + stockClass + '">' + stockLabel + '</div></div>' +
+      '<div style="display:flex;gap:8px;align-items:center;">' +
+      '<input class="qty" type="text" id="qty-' + i + '" value="1">' +
+      '<button class="addBtn" ' + disabledAttr + ' onclick="addToCart(' + i + ')">Add</button>' +
+      '</div></div>';
+  }).join('');
+}
+
+function addToCart(productIndex){
+  const product = products[productIndex];
+  const qtyInput = document.getElementById('qty-' + productIndex);
+  const rawValue = qtyInput.value;
+
+  if(product.stock === 0){
+    showMsg(product.name + ' is out of stock', 'err');
+    return;
+  }
+  if(!/^\d+$/.test(rawValue)){
+    showMsg('Quantity must be a positive whole number', 'err');
+    return;
+  }
+  const qty = parseInt(rawValue, 10);
+  if(qty <= 0){
+    showMsg('Quantity must be at least 1', 'err');
+    return;
+  }
+
+  const existing = cart.find(function(item){ return item.name === product.name; });
+  const alreadyInCart = existing ? existing.qty : 0;
+  if(alreadyInCart + qty > product.stock){
+    showMsg('Only ' + product.stock + ' of ' + product.name + ' in stock', 'err');
+    return;
+  }
+
+  if(existing){
+    existing.qty += qty;
+  } else {
+    cart.push({ name: product.name, price: product.price, qty: qty });
+  }
+  render();
+  showMsg(product.name + ' added to cart!', 'ok');
+}
+
+function removeFromCart(index){
+  cart.splice(index, 1);
+  render();
+}
+
+function renderCartList(){
+  const el = document.getElementById('cartItems');
+  if(cart.length === 0){
+    el.innerHTML = '<div class="empty">Cart is empty.</div>';
+    return;
+  }
+  el.innerHTML = cart.map(function(item, i){
+    return '<div class="cartItem">' +
+      '<span>' + item.name + ' × ' + item.qty + '</span>' +
+      '<span>$' + (item.price * item.qty).toFixed(2) + '</span>' +
+      '<button class="removeBtn" onclick="removeFromCart(' + i + ')">Remove</button>' +
+      '</div>';
+  }).join('');
+}
+
+// Single source of truth: always recompute subtotal/total fresh from
+// cart + discountApplied, instead of mutating a running "total" variable.
+function updateTotals(){
+  const subtotal = cart.reduce(function(sum, item){ return sum + item.price * item.qty; }, 0);
+  const total = discountApplied ? subtotal * 0.9 : subtotal;
+  document.getElementById('subtotal').textContent = '$' + subtotal.toFixed(2);
+  document.getElementById('total').textContent = '$' + total.toFixed(2);
+  document.getElementById('discountRow').textContent = discountApplied ? '-10%' : '—';
+}
+
+function render(){
+  renderCartList();
+  updateTotals();
+}
+
+function applyDiscount(){
+  const code = document.getElementById('discountCode').value.toUpperCase();
+  if(code !== 'SAVE10'){
+    showMsg('Invalid discount code', 'err');
+    return;
+  }
+  if(discountApplied){
+    showMsg('Discount already applied', 'ok');
+    return;
+  }
+  discountApplied = true;
+  updateTotals();
+  showMsg('Discount applied!', 'ok');
+}
+
+function checkout(){
+  if(cart.length === 0){
+    showMsg('Your cart is empty', 'err');
+    return;
+  }
+  const totalText = document.getElementById('total').textContent;
+  showMsg('Order placed successfully! Total charged: ' + totalText, 'ok');
+}
+
+function showMsg(text, type){
+  const msg = document.getElementById('msg');
+  msg.textContent = text;
+  msg.className = 'msg ' + type;
+}
+
+renderProducts();
+</script>
+</body>
+</html>
